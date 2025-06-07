@@ -1,32 +1,39 @@
 import fetch from 'node-fetch';
 
-// В Netlify Environment Variables:
-//   AMO_SUBDOMAIN — ваш поддомен, например getmotorx
-//   AMO_TOKEN     — ваш токен доступа
-
 export async function handler(event) {
-  const { path, httpMethod, queryStringParameters } = event;
-  // path: "/.netlify/functions/amocrm-proxy/leads"
-  // извлечь часть после имени функции:
-  const apiPath = event.path.replace(/^\/api\/amocrm\//, ''); // "leads"
-  // Собрать URL к amoCRM:
+  // 1) Логируем всё входящее
+  console.log('--- New invocation ---');
+  console.log('event.path           =', event.path);
+  console.log('event.rawQuery       =', event.rawQuery);
+  console.log('event.queryStringParameters =', event.queryStringParameters);
+
+  // 2) Вырезаем apiPath точно по redirect’у из netlify.toml
+  //    У вас from = "/api/amocrm/*" → :splat = "leads" и т.п.
+  const apiPath = event.path.replace(/^\/api\/amocrm\//, '');
+  console.log('apiPath              =', apiPath);
+
+  // 3) Собираем полный URL
   const qs = event.rawQuery || '';
   const url = `https://${process.env.AMO_SUBDOMAIN}.amocrm.ru/api/v4/${apiPath}${qs ? `?${qs}` : ''}`;
+  console.log('Fetching URL         =', url);
 
   try {
     const apiRes = await fetch(url, {
-      method: httpMethod,
+      method: event.httpMethod,
       headers: {
         'Authorization': `Bearer ${process.env.AMO_TOKEN}`,
         'Content-Type': 'application/json'
       }
     });
+
+    console.log('AmoCRM status        =', apiRes.status);
     const text = await apiRes.text();
+    console.log('AmoCRM response body =', text);
+
     return {
       statusCode: apiRes.status,
       headers: {
         'Content-Type': apiRes.headers.get('content-type'),
-        // разрешить фронту обращаться к функции
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET,OPTIONS',
         'Access-Control-Allow-Headers': 'Authorization,Content-Type'
@@ -38,7 +45,7 @@ export async function handler(event) {
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'Proxy error' })
+      body: JSON.stringify({ error: 'Proxy error', message: error.message })
     };
   }
 }
