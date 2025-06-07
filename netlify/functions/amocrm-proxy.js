@@ -8,7 +8,7 @@ export async function handler(event) {
   console.log('event.queryStringParameters =', event.queryStringParameters);
 
   // 2) Вырезаем apiPath точно по redirect’у из netlify.toml
-  //    У вас from = "/api/amocrm/*" → :splat = "leads" и т.п.
+  //    У вас from = "/api/amocrm/*" → :splat = "leads"
   const apiPath = event.path.replace(/^\/api\/amocrm\//, '');
   console.log('apiPath              =', apiPath);
 
