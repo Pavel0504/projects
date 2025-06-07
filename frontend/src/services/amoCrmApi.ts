@@ -68,6 +68,7 @@ class AmoCrmApiService {
     if (!this.config) {
       throw new Error('AMO CRM не настроен. Пожалуйста, укажите поддомен и токен доступа.');
     }
+    // все запросы идут через Netlify Function-прокси
     return `/api/amocrm`;
   }
 
@@ -76,99 +77,101 @@ class AmoCrmApiService {
       throw new Error('AMO CRM не настроен. Пожалуйста, укажите поддомен и токен доступа.');
     }
     return {
-      'Authorization': `Bearer ${this.config.accessToken}`,
+      Authorization: `Bearer ${this.config.accessToken}`,
     };
   }
 
-  async getDeals(params?: {
+  /** Собирает относительный URL + query-параметры */
+  private buildUrl(path: string, params?: Record<string, any>): string {
+    const base = this.getBaseUrl();
+    const separator = path.startsWith('/') ? '' : '/';
+    let url = `${base}${separator}${path}`;
+    if (params) {
+      const qp = new URLSearchParams();
+      Object.entries(params).forEach(([key, value]) => {
+        qp.set(key, String(value));
+      });
+      const query = qp.toString();
+      if (query) {
+        url += `?${query}`;
+      }
+    }
+    return url;
+  }
+
+  async getDeals(options?: {
     limit?: number;
     page?: number;
     with?: string;
     filter?: Record<string, any>;
   }): Promise<AmoCrmApiResponse<AmoCrmDeal>> {
-    const url = new URL(`${this.getBaseUrl()}/leads`);
-    
-    if (params?.limit) url.searchParams.set('limit', params.limit.toString());
-    if (params?.page) url.searchParams.set('page', params.page.toString());
-    if (params?.with) url.searchParams.set('with', params.with);
-    if (params?.filter) {
-      Object.entries(params.filter).forEach(([key, value]) => {
-        url.searchParams.set(`filter[${key}]`, value.toString());
+    const params: Record<string, any> = {};
+    if (options?.limit)  params.limit = options.limit;
+    if (options?.page)   params.page = options.page;
+    if (options?.with)   params.with = options.with;
+    if (options?.filter) {
+      Object.entries(options.filter).forEach(([key, value]) => {
+        params[`filter[${key}]`] = value;
       });
     }
 
-    const response = await fetch(url.toString(), {
+    const url = this.buildUrl('leads', params);
+    const response = await fetch(url, {
       method: 'GET',
       headers: this.getHeaders(),
     });
-
     if (!response.ok) {
-      if (response.status === 401) {
-        throw new Error('Неверный токен доступа или истек срок действия');
-      } else if (response.status === 402) {
-        throw new Error('Аккаунт AMO CRM не оплачен');
-      } else {
-        throw new Error(`Ошибка API AMO CRM: ${response.status} ${response.statusText}`);
-      }
+      if (response.status === 401) throw new Error('Неверный токен доступа или истек срок действия');
+      if (response.status === 402) throw new Error('Аккаунт AMO CRM не оплачен');
+      throw new Error(`Ошибка API AMO CRM: ${response.status} ${response.statusText}`);
     }
-
     return response.json();
   }
 
-  async getDeal(id: number, params?: { with?: string }): Promise<AmoCrmDeal> {
-    const url = new URL(`${this.getBaseUrl()}/leads/${id}`);
-    
-    if (params?.with) url.searchParams.set('with', params.with);
+  async getDeal(id: number, options?: { with?: string }): Promise<AmoCrmDeal> {
+    const params: Record<string, any> = {};
+    if (options?.with) params.with = options.with;
 
-    const response = await fetch(url.toString(), {
+    const url = this.buildUrl(`leads/${id}`, params);
+    const response = await fetch(url, {
       method: 'GET',
       headers: this.getHeaders(),
     });
-
     if (!response.ok) {
-      if (response.status === 204) {
-        throw new Error('Сделка с указанным ID не найдена');
-      } else if (response.status === 401) {
-        throw new Error('Неверный токен доступа или истек срок действия');
-      } else {
-        throw new Error(`Ошибка API AMO CRM: ${response.status} ${response.statusText}`);
-      }
+      if (response.status === 204) throw new Error('Сделка с указанным ID не найдена');
+      if (response.status === 401) throw new Error('Неверный токен доступа или истек срок действия');
+      throw new Error(`Ошибка API AMO CRM: ${response.status} ${response.statusText}`);
     }
-
     return response.json();
   }
 
   async getContact(id: number): Promise<AmoCrmContact> {
-    const response = await fetch(`${this.getBaseUrl()}/contacts/${id}`, {
+    const url = this.buildUrl(`contacts/${id}`);
+    const response = await fetch(url, {
       method: 'GET',
       headers: this.getHeaders(),
     });
-
     if (!response.ok) {
       throw new Error(`Ошибка получения контакта: ${response.status} ${response.statusText}`);
     }
-
     return response.json();
   }
 
   async getContacts(ids: number[]): Promise<AmoCrmApiResponse<AmoCrmContact>> {
-    const url = new URL(`${this.getBaseUrl()}/contacts`);
-    url.searchParams.set('filter[id]', ids.join(','));
-
-    const response = await fetch(url.toString(), {
+    const params = { 'filter[id]': ids.join(',') };
+    const url = this.buildUrl('contacts', params);
+    const response = await fetch(url, {
       method: 'GET',
       headers: this.getHeaders(),
     });
-
     if (!response.ok) {
       throw new Error(`Ошибка получения контактов: ${response.status} ${response.statusText}`);
     }
-
     return response.json();
   }
 
   isConfigured(): boolean {
-    return this.config !== null && this.config.subdomain !== '' && this.config.accessToken !== '';
+    return !!this.config?.subdomain && !!this.config?.accessToken;
   }
 }
 
