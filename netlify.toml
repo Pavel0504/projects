@@ -1,15 +1,10 @@
 [build]
-  command = "npm run build"
-  publish = "frontend/dist"
-  functions = "netlify/functions"
-
-[dev]
-  command = "npm start"  # опционально, если используете локальный dev
-  publish = "frontend/dist"
+  command   = "cd frontend && npm install && npm run build"
+  publish   = "frontend/dist"
   functions = "netlify/functions"
 
 [[redirects]]
-  from = "/api/amocrm/*"
-  to = "/.netlify/functions/amocrm-proxy/:splat"
+  from   = "/api/amocrm/*"          # Прокси путь
+  to     = "/.netlify/functions/amocrm-proxy/:splat"
   status = 200
-  force = true
+  force  = true
