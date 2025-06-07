@@ -8,7 +8,7 @@ export async function handler(event) {
   const { path, httpMethod, queryStringParameters } = event;
   // path: "/.netlify/functions/amocrm-proxy/leads"
   // извлечь часть после имени функции:
-  const apiPath = path.replace(/^\/.+?\//, ''); // "leads"
+  const apiPath = event.path.replace(/^\/api\/amocrm\//, ''); // "leads"
   // Собрать URL к amoCRM:
   const qs = event.rawQuery || '';
   const url = `https://${process.env.AMO_SUBDOMAIN}.amocrm.ru/api/v4/${apiPath}${qs ? `?${qs}` : ''}`;
